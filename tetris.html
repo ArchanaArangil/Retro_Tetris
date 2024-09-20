@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Tetris</title>
+    <style>
+        body {
+            justify-content: center;
+            background-color: black;
+            align-items: center;
+
+            text-decoration: white;
+            display:flex;
+            text-decoration-color: white;
+        }
+
+        canvas {
+            border: 1px solid white;
+            width: 320px;
+            height: 640px;
+
+        }
+        h1{
+            font-family: "Verdana", Geneva, Tahoma, sans-serif;
+            margin: 20px 0;
+            color:white;
+            text-decoration-color: white;
+        }
+    </style>
+</head>
+<body>
+    <h1>Tetris</h1>
+    <button id="startbutton" onclick = "startGame()" >Start Game</button>
+
+    <canvas id="gameboard" ></canvas>
+
+</body>
+
+<script>
+    const blockSequence = []
+    var block;
+    var blockGrid;
+    var blockColor;
+    var isBottom = false;
+    var numBlocks = 0;   
+    //buildSequence();      
+    console.log(blockSequence);
+    const canvas = document.getElementById('gameboard');
+    const ctxt = canvas.getContext('2d');
+    let rAF = null;
+    let rowIndex = 0;
+    let colIndex = 0;
+    var timer = null;
+    var gameIsOver = false;
+    const normSpeed = 500;
+    const fastSpeed = 150;
+    var speed = normSpeed;
+    
+    const tetrisblocks = {
+        'O': [[1,1],
+              [1,1]
+        ],
+        'T': [[1,1,1],
+              [0,1,0],
+              [0,0,0]
+        ],
+        'L': [[0,0,1],
+              [1,1,1],
+              [0,0,0]
+        ],
+        'I': [[0,1,0,0],
+            [0,1,0,0],
+            [0,1,0,0],
+            [0,1,0,0]
+        ],
+        'J': [[0,1,0],
+              [0,1,0],
+              [1,1,0]
+        ],
+        'Z': [[1,1,0],
+              [0,1,1],
+              [0,0,0]
+        ],
+        'S': [[0,1,1],
+              [1,1,0],
+              [0,0,0]
+        ]
+    };
+
+    const colors = {
+        'O' : 'yellow',
+        'T' : 'purple',
+        'L' : 'blue',
+        'I' : 'cyan',
+        'J' : 'orange',
+        'Z' : 'green',
+        'S' : 'red'
+    }
+
+    class Cube{
+        
+        constructor(value, color){
+            this.value = value;
+            this.color = color;
+            this.falling = true;
+        }
+
+        setEmpty(){
+            this.value = 0;
+            this.color = 'black';
+            this.falling = true;
+        }
+
+        setInPlace(){
+            this.falling = false;
+        }
+
+        setFilled(color) {
+            this.value = 1;
+            this.color = color;
+        }
+        
+        isFalling() {
+            return this.falling;
+        }
+
+        isFilled() {
+            return this.value;
+        }
+    }
+
+    function startGame()
+    {
+        document.getElementById('startbutton').style.visibility='hidden';
+        buildSequence();
+        after();
+
+    }
+
+
+    document.addEventListener("keydown", (e) => {
+        e=e||winow.event;
+        if(e.keyCode == 38) //up
+        {
+            rotateBlock();
+        }
+        else if (e.keyCode == 37) //left
+        {
+            moveBlockLeft();
+        }
+        else if (e.keyCode == 39) //right
+        {
+            moveBlockRight();
+        }
+        else if (e.keyCode == 40) //down
+        {
+            speed = fastSpeed;
+        }
+
+    });
+
+    document.addEventListener("keyup", (e) => {
+        e=e||winow.event;
+        if (e.keyCode == 40) //down
+        {
+            speed = normSpeed;
+        }
+
+    });
+
+
+    function rotateBlock()
+    {
+        const matrix = rotate(blockGrid);
+        var tempBlockGrid = blockGrid;
+        blockGrid = matrix;
+        if (checkCollision(rowIndex, colIndex)) {
+            blockGrid = tempBlockGrid;
+        }
+    }
+
+    function moveBlockLeft()
+    {
+        console.log("block moved left");
+        if (!checkCollision(rowIndex, colIndex - 1)){
+            colIndex--;
+        }
+    }
+
+    function moveBlockRight()
+    {
+        console.log("block moved right");
+        if (!checkCollision(rowIndex, colIndex + 1)){
+            colIndex++;
+        }
+    }
+
+
+    function buildSequence(){
+        
+        const sequence = ['I', 'J', 'L', 'O', 'S', 'T', 'Z'];
+        for(var i = 0; i < 200; i++){
+            var index = Math.floor(Math.random() * (sequence.length));
+            blockSequence.push(sequence[index]);
+        }
+        
+        /*const sequence = ['I', 'J', 'L', 'O', 'S', 'T', 'Z'];
+        for(var i = 0; i < 7; i++){
+            blockSequence.push(sequence[i]);
+        }*/
+    }
+
+    function newBlock(){
+        block = blockSequence[numBlocks];
+        blockGrid = tetrisblocks[block];
+        blockColor = colors[block];
+        rowIndex = 0;
+        colIndex = 7;
+        isBottom = false;
+        numBlocks++;
+        speed = normSpeed;
+    }
+
+    function after() {
+        ctxt.fillStyle = 'black';
+        newBlock();
+        //setInterval(drawPlayGrid, 250);
+        drawPlayGrid();
+    }
+
+    let playGrid = [];
+
+    setPlayGrid();
+
+
+    function setPlayGrid(){
+        for (let row = 0; row < 15; row++) {
+            playGrid[row] = [];
+
+            for (let col = 0; col < 10; col++) {
+                let c = new Cube(0, "black");
+                playGrid[row].push(c);
+            }
+        }
+    }
+
+    // Check if moving to this new position will cause a collision
+    function checkCollision(newBlockRowIndex, newBlockColIndex) {
+        var isCollision = false;
+
+        for (var i = 0; i < blockGrid.length; i++) {
+            for(var j = 0; j < blockGrid[0].length; j++){ 
+                if ((newBlockRowIndex + i) < 15 && (newBlockColIndex + j) < 10 && (newBlockColIndex >= 0)) {
+                    // Check if there is a solid cell in this position that is not falling
+                    if (playGrid[newBlockRowIndex + i][newBlockColIndex + j].value == 1 
+                        && playGrid[newBlockRowIndex + i][newBlockColIndex + j].falling == false 
+                        && blockGrid[i][j] == 1) {
+                        isCollision = true;
+                    }
+                }
+
+                
+            }
+        }
+
+
+        if(!isCollision && newBlockColIndex < 0){
+            // check column that is moving out of bounds
+            var chkColumn = (newBlockColIndex * -1) - 1;
+            for(var p = 0; p < blockGrid.length; p++){
+                if(blockGrid[p][chkColumn] == 1){
+                    isCollision = true;
+                }
+            }
+        }
+
+        if(!isCollision && (newBlockColIndex + blockGrid[0].length - 1) >= playGrid[0].length){
+            var chkColumn = playGrid[0].length - newBlockColIndex;
+            for(var p = 0; p < blockGrid.length; p++){
+                if(blockGrid[p][chkColumn] == 1){
+                    isCollision = true;
+                }
+            }
+        }
+
+        return isCollision;
+    }
+
+    function rotate(matrix) {
+        if(matrix != null){
+            const N = matrix.length - 1;
+            const result = matrix.map((row, i) =>
+                row.map((val, j) => matrix[N - j][i])
+            );
+            return result;
+        }
+        return null;
+    }
+
+
+    function gameOver() {
+        clearTimeout(timer);
+        gameIsOver == true;
+
+        ctxt.fillStyle = 'black';
+        ctxt.globalAlpha = 0.75;
+        ctxt.fillRect(0, canvas.height / 2 - 30, canvas.width, 60);
+
+        ctxt.globalAlpha = 1;
+        ctxt.fillStyle = 'white';
+        ctxt.font = '24px monospace';
+        ctxt.textAlign = 'center';
+        ctxt.textBaseline = 'middle';
+        ctxt.fillText('GAME OVER!', canvas.width / 2, canvas.height / 2);
+    }
+
+    function checkCompleteRow(){
+        var fullRow = false;
+        var rowIndex = [];
+        for(var i = 0; i <playGrid.length; i++){
+            fullRow = true;
+            for(var j = 0; j < playGrid[0].length; j++){
+                if(!(playGrid[i][j].value == 1)){
+                    fullRow = false;
+                }
+            }
+            if(fullRow){
+                rowIndex.push(i);
+            }
+        }
+
+        for(let i = 0; i < rowIndex.length; i++){
+            playGrid.splice(rowIndex[i], 1);
+            playGrid.unshift([]);
+            for(var c = 0; c < playGrid[1].length; c++){
+                playGrid[0][c] = new Cube(0, 'black');
+            }
+        }
+    }
+
+
+    function drawPlayGrid(){
+        if (blockGrid == null || gameIsOver) return;
+
+        //rAF = requestAnimationFrame(drawPlayGrid);
+        // Set all PlayGrid cells = 0 or falling to Empty
+        for(var r = 0; r < 15; r++){
+            for(var c = 0; c < 10; c++){
+                if(playGrid[r][c].falling == true || playGrid[r][c].value == 0){
+                    playGrid[r][c].setEmpty();
+                    ctxt.fillStyle = 'black';
+                    ctxt.fillRect( (c*30), (r*10), 28, 9);
+                }
+            }
+        }
+
+        isBottom = false;
+        // Check if block has reached the bottom
+        if (rowIndex + blockGrid.length >= 15) {
+            // Check if there are solids in last visible block
+            var lastVisibleRow = 15 - rowIndex;
+            for(var p = 0; p < blockGrid[lastVisibleRow-1].length; p++){
+                if(blockGrid[lastVisibleRow-1][p] == 1){
+                    isBottom = true;
+                }
+            }
+        }
+
+        // check if moving to next row would cause a collision. If so, mark this as the bottom
+        if (!isBottom) {
+            isBottom = checkCollision(rowIndex + 1, colIndex);
+        }
+        
+        // Transfer over blockGrid pattern to playGrid
+        for(var i = 0; i < blockGrid.length; i++){
+            for(var j = 0; j < blockGrid[0].length; j++){   
+                // Disregard part of block that falls below playgrid
+                if((i+rowIndex <= playGrid.length-1) && (j+colIndex < playGrid[0].length) && (j+colIndex >= 0)){    
+                    // If this is the bottom set in place
+                    if (isBottom) {
+                        playGrid[i+rowIndex][j+colIndex].setInPlace();
+                    }
+
+                    // BlockGrid cells = 0 should be set to Empty. 
+                    if(blockGrid[i][j] == 0){ 
+                        if (!playGrid[i+rowIndex][j+colIndex].isFilled) {
+                            playGrid[i+rowIndex][j+colIndex].setEmpty();
+                        } 
+                    }
+                    else {
+                        // BlockGrid cells = 1 should be set to Cube with the given block color. Set in place if this is the bottom
+                        playGrid[i+rowIndex][j+colIndex].setFilled(blockColor);
+                    }
+                }
+
+            }
+        }
+
+        checkCompleteRow();
+        
+        // Repaint Play Grid
+        for(var r = 0; r < 15; r++){
+            for(var c = 0; c < 10; c++){
+                ctxt.fillStyle = playGrid[r][c].color;
+                ctxt.fillRect( (c*30), (r*10), 28, 9);
+
+            }
+        }
+
+        if(isBottom && rowIndex == 0){
+            gameOver();
+            return;
+        }
+
+        if(isBottom){
+            // This block has landed. Drop next block.
+            newBlock();
+        }
+        else {
+            // Increment the current row index of the block.
+            rowIndex++;
+        }
+
+        // call drawPlayGrid again after x amount of time
+        timer = setTimeout(drawPlayGrid, speed);
+    }
+    
+    
+    </script>
+</html>
